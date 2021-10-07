@@ -66,6 +66,10 @@ where
         }
     }
 
+    pub fn current_step(&self) -> u64 {
+        self.current_step
+    }
+
     /// Adds new player to the session.
     pub async fn add_player<'a, P, J, K>(
         &mut self,

@@ -23,6 +23,5 @@ tracing = "0.1"
 [dev-dependencies]
 tokio = { version = "1.0", features = ["macros", "rt", "net", "time"] }
 
-
-[examples.client_server]
+[[examples.client_server]]
 required-features = ["tcp"]

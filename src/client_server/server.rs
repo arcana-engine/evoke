@@ -3,7 +3,7 @@ use std::{collections::HashMap, error::Error, num::NonZeroU64};
 use alkahest::{Schema, SeqUnpacked, Unpacked};
 use scoped_arena::Scope;
 
-use crate::channel::{Channel, Listner};
+use crate::channel::{Channel, Listener};
 
 use super::*;
 
@@ -33,7 +33,7 @@ struct Client<C> {
 }
 
 pub struct ServerSession<C, L> {
-    listner: L,
+    listener: L,
     step_delta_ns: u64,
     current_step: u64,
     current_step_ns: u64,
@@ -125,6 +125,7 @@ where
 
 pub struct InputsEvent<'a, I: Schema> {
     inputs: SeqUnpacked<'a, (PlayerId, I)>,
+    step: u64,
 }
 
 impl<'a, I> InputsEvent<'a, I>
@@ -136,17 +137,21 @@ where
             .clone()
             .filter_map(|(pid, input)| Some((pid?, input)))
     }
+
+    pub fn step(&self) -> u64 {
+        self.step
+    }
 }
 
 impl<C, L> ServerSession<C, L>
 where
     C: Channel,
-    L: Listner<Channel = C>,
+    L: Listener<Channel = C>,
 {
     /// Create new server session via specified channel.
-    pub fn new(listner: L, step_delta_ns: u64) -> Self {
+    pub fn new(listener: L, step_delta_ns: u64) -> Self {
         ServerSession {
-            listner,
+            listener,
             step_delta_ns,
             current_step: 0,
             current_step_ns: 0,
@@ -157,6 +162,10 @@ where
                 NonZeroU64::new_unchecked(1)
             },
         }
+    }
+
+    pub fn current_step(&self) -> u64 {
+        self.current_step
     }
 
     /// Advances server-side simulation by one step.
@@ -209,7 +218,7 @@ where
             .retain(|_, client| client.state != ClientState::Disconnected);
 
         loop {
-            match self.listner.try_accept()? {
+            match self.listener.try_accept()? {
                 None => break,
                 Some(channel) => {
                     let client = Client {
@@ -255,9 +264,9 @@ where
                 }
                 Ok(Some(ClientMessageUnpacked::Inputs { step, inputs })) => {
                     if let ClientState::Connected = client.state {
-                        if client.last_input_step < step {
+                        if client.last_input_step <= step {
                             client.last_input_step = step;
-                            Some((cid, Event::Inputs(InputsEvent { inputs })))
+                            Some((cid, Event::Inputs(InputsEvent { inputs, step })))
                         } else {
                             None
                         }
@@ -269,7 +278,7 @@ where
                 Err(err) => {
                     tracing::error!("Client error: {}", err);
                     client.state = ClientState::Disconnected;
-                    None
+                    Some((cid, Event::Disconnected))
                 }
             }
         });

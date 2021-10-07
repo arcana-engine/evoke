@@ -49,7 +49,7 @@ pub trait Channel: ChannelError + for<'a> ChannelFuture<'a> {
         S: Schema;
 }
 
-pub trait Listner {
+pub trait Listener {
     type Error: Error + 'static;
     type Channel: Channel;
 

@@ -23,11 +23,11 @@ struct TestJoinInfo {
 async fn main() {
     let step = Duration::new(0, 20_000_000);
 
-    let listner = TcpListener::bind((Ipv4Addr::LOCALHOST, 12523))
+    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 12523))
         .await
-        .expect("Failed to create TCP listner");
+        .expect("Failed to create TCP listener");
 
-    let mut server = ServerSession::new(listner, 20_000_000);
+    let mut server = ServerSession::new(listener, 20_000_000);
 
     let set = tokio::task::LocalSet::new();
 

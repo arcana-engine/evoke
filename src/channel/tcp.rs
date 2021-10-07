@@ -12,7 +12,7 @@ use alkahest::{Pack, Schema, Unpacked};
 use scoped_arena::Scope;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 
-use super::{Channel, ChannelError, ChannelFuture, Listner};
+use super::{Channel, ChannelError, ChannelFuture, Listener};
 
 #[must_use = "futures do nothing unless you `.await` or poll them"]
 pub struct TcpSend<'a> {
@@ -133,70 +133,91 @@ impl Channel for TcpChannel {
     where
         S: Schema,
     {
-        'outer: loop {
-            let result = self.stream.try_read(&mut self.buf[self.buf_len..]);
+        // Get header
+        let header = loop {
+            if self.buf_len < size_of::<TcpHeader>() {
+                let result = self.stream.try_read(&mut self.buf[self.buf_len..]);
 
-            match result {
-                Ok(read) => {
-                    if read == 0 {
-                        return Err(std::io::ErrorKind::ConnectionAborted.into());
-                    } else {
-                        self.buf_len += read;
-
-                        let header = 'inner: loop {
-                            if self.buf_len < size_of::<TcpHeader>() {
-                                continue 'outer;
-                            } else {
-                                let mut header = TcpHeader { magic: 0, size: 0 };
-
-                                unsafe {
-                                    copy_nonoverlapping(
-                                        self.buf.as_ptr(),
-                                        &mut header as *mut TcpHeader as *mut u8,
-                                        size_of::<TcpHeader>(),
-                                    );
-                                }
-
-                                if u32::from_le(header.magic) != MAGIC {
-                                    unsafe {
-                                        std::ptr::copy(
-                                            self.buf.as_ptr().add(1),
-                                            self.buf.as_mut_ptr(),
-                                            self.buf_len - 1,
-                                        );
-                                    }
-                                    continue 'inner;
-                                }
-                                break 'inner header;
-                            }
-                        };
-
-                        let size = header.size as usize;
-                        if self.buf_len >= size + size_of::<TcpHeader>() {
-                            let packet = scope.to_scope_from_iter(
-                                self.buf[size_of::<TcpHeader>()..].iter().copied(),
-                            );
-
-                            unsafe {
-                                std::ptr::copy(
-                                    self.buf.as_ptr().add(size + size_of::<TcpHeader>()),
-                                    self.buf.as_mut_ptr(),
-                                    self.buf_len - size + size_of::<TcpHeader>(),
-                                );
-                            }
-
-                            self.buf_len -= size + size_of::<TcpHeader>();
-
-                            let unpacked = alkahest::read::<S>(&*packet);
-
-                            return Ok(Some(unpacked));
+                match result {
+                    Ok(read) => {
+                        if read == 0 {
+                            return Err(std::io::ErrorKind::ConnectionAborted.into());
+                        } else {
+                            self.buf_len += read;
                         }
                     }
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => return Ok(None),
+                    Err(err) => return Err(err),
                 }
-                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => return Ok(None),
-                Err(err) => return Err(err),
+
+                continue;
+            } else {
+                let mut header = TcpHeader { magic: 0, size: 0 };
+
+                unsafe {
+                    copy_nonoverlapping(
+                        self.buf.as_ptr(),
+                        &mut header as *mut TcpHeader as *mut u8,
+                        size_of::<TcpHeader>(),
+                    );
+                }
+
+                // Check magic value
+                if u32::from_le(header.magic) != MAGIC {
+                    unsafe {
+                        // Rotate buf
+                        std::ptr::copy(
+                            self.buf.as_ptr().add(1),
+                            self.buf.as_mut_ptr(),
+                            self.buf_len - 1,
+                        );
+                    }
+                    continue;
+                }
+
+                break header;
             }
+        };
+
+        let size = header.size as usize;
+
+        // Get payload
+        let payload = loop {
+            if self.buf_len < size_of::<TcpHeader>() + size {
+                let result = self.stream.try_read(&mut self.buf[self.buf_len..]);
+
+                match result {
+                    Ok(read) => {
+                        if read == 0 {
+                            return Err(std::io::ErrorKind::ConnectionAborted.into());
+                        } else {
+                            self.buf_len += read;
+                        }
+                    }
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => return Ok(None),
+                    Err(err) => return Err(err),
+                }
+
+                continue;
+            } else {
+                break scope.to_scope_from_iter(self.buf[size_of::<TcpHeader>()..].iter().copied());
+            }
+        };
+
+        // Move buf tail
+        unsafe {
+            std::ptr::copy(
+                self.buf.as_ptr().add(size_of::<TcpHeader>() + size),
+                self.buf.as_mut_ptr(),
+                self.buf_len - size + size_of::<TcpHeader>(),
+            );
         }
+
+        self.buf_len -= size + size_of::<TcpHeader>();
+
+        let unpacked = alkahest::read::<S>(payload);
+
+        return Ok(Some(unpacked));
     }
 }
 
@@ -208,7 +229,7 @@ struct TcpHeader {
 
 const MAGIC: u32 = u32::from_le_bytes(*b"astr");
 
-impl Listner for TcpListener {
+impl Listener for TcpListener {
     type Error = Error;
     type Channel = TcpChannel;
 
