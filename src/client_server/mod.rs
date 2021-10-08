@@ -13,12 +13,16 @@ pub use self::{client::*, server::*};
 #[repr(transparent)]
 pub struct PlayerId(pub NonZeroU64);
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("Zero PlayerId unpacked")]
+pub struct ZeroPlayerIdError;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct ClientId(pub NonZeroU64);
 
 impl SchemaUnpack<'_> for PlayerId {
-    type Unpacked = Option<Self>;
+    type Unpacked = Result<Self, ZeroPlayerIdError>;
 }
 
 impl Schema for PlayerId {
@@ -28,14 +32,47 @@ impl Schema for PlayerId {
         align_of::<u64>()
     }
 
-    fn unpack<'a>(packed: u64, _input: &'a [u8]) -> Option<Self> {
-        NonZeroU64::new(packed).map(PlayerId)
+    fn unpack<'a>(packed: u64, _input: &'a [u8]) -> Result<Self, ZeroPlayerIdError> {
+        NonZeroU64::new(packed)
+            .map(PlayerId)
+            .ok_or(ZeroPlayerIdError)
     }
 }
 
 impl Pack<PlayerId> for PlayerId {
     fn pack(self, _offset: usize, _output: &mut [u8]) -> (u64, usize) {
         (self.0.get(), 0)
+    }
+}
+
+/// More efficient schema replacement for `Option<PlayerId>`
+pub struct MaybePlayerId;
+
+impl SchemaUnpack<'_> for MaybePlayerId {
+    type Unpacked = Option<PlayerId>;
+}
+
+impl Schema for MaybePlayerId {
+    type Packed = u64;
+
+    fn align() -> usize {
+        align_of::<u64>()
+    }
+
+    fn unpack<'a>(packed: u64, _input: &'a [u8]) -> Option<PlayerId> {
+        NonZeroU64::new(packed).map(PlayerId)
+    }
+}
+
+impl Pack<MaybePlayerId> for PlayerId {
+    fn pack(self, _offset: usize, _output: &mut [u8]) -> (u64, usize) {
+        (self.0.get(), 0)
+    }
+}
+
+impl Pack<MaybePlayerId> for Option<PlayerId> {
+    fn pack(self, _offset: usize, _output: &mut [u8]) -> (u64, usize) {
+        (self.map_or(0, |pid| pid.0.get()), 0)
     }
 }
 
