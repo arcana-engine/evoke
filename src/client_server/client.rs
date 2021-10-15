@@ -26,8 +26,7 @@ pub struct Updates<'a, U: Schema> {
 pub struct ClientSession<C> {
     channel: C,
     current_step: u64,
-    step_delta_ns: u64,
-    current_step_ns: u64,
+    next_update_step: u64,
 }
 
 impl<C> ClientSession<C>
@@ -43,15 +42,11 @@ where
 
         loop {
             match channel.recv::<ServerMessage>(&scope) {
-                Ok(Some(ServerMessageUnpacked::Connected {
-                    step,
-                    step_delta_ns,
-                })) => {
+                Ok(Some(ServerMessageUnpacked::Connected { step })) => {
                     return Ok(ClientSession {
                         channel,
                         current_step: step,
-                        step_delta_ns,
-                        current_step_ns: 0,
+                        next_update_step: 0,
                     });
                 }
                 Ok(Some(ServerMessageUnpacked::Updates { .. })) => {}
@@ -116,6 +111,7 @@ where
             .send_reliable::<ClientMessage<(), T>, _>(
                 ClientMessageInputsPack {
                     step: self.current_step,
+                    next_update_step: self.next_update_step,
                     inputs: inputs.into_iter(),
                 },
                 scope,
@@ -128,29 +124,28 @@ where
     /// Advances client-side simulation by one step.
     pub fn advance<'a, U>(
         &mut self,
-        delta_ns: u64,
         scope: &'a Scope<'_>,
     ) -> Result<Option<Updates<'a, U>>, ClientError<C::Error>>
     where
         U: Schema,
     {
-        self.current_step_ns += delta_ns;
-
-        let steps = self.current_step_ns / self.step_delta_ns;
-        self.current_step_ns %= self.step_delta_ns;
-        self.current_step += steps;
-
-        match self.channel.recv::<ServerMessage<(), U>>(scope) {
+        let updates = match self.channel.recv::<ServerMessage<(), U>>(scope) {
             Ok(Some(ServerMessageUnpacked::Updates {
                 server_step,
                 updates,
-            })) => Ok(Some(Updates {
-                server_step,
-                updates,
-            })),
-            Ok(Some(_)) => Err(ClientError::UnexpectedMessage),
-            Ok(None) => Ok(None),
-            Err(err) => Err(err.into()),
-        }
+            })) => {
+                self.next_update_step = server_step + 1;
+                Some(Updates {
+                    server_step,
+                    updates,
+                })
+            }
+            Ok(Some(_)) => return Err(ClientError::UnexpectedMessage),
+            Ok(None) => None,
+            Err(err) => return Err(err.into()),
+        };
+
+        self.current_step += 1;
+        Ok(updates)
     }
 }

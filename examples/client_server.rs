@@ -27,7 +27,7 @@ async fn main() {
         .await
         .expect("Failed to create TCP listener");
 
-    let mut server = ServerSession::new(listener, 20_000_000);
+    let mut server = ServerSession::new(listener);
 
     let set = tokio::task::LocalSet::new();
 

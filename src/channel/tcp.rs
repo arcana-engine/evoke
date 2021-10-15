@@ -2,7 +2,7 @@ use std::{
     alloc::Layout,
     convert::TryFrom,
     future::Future,
-    io::Error,
+    io::{Error, ErrorKind},
     mem::{size_of, size_of_val},
     pin::Pin,
     ptr::copy_nonoverlapping,
@@ -14,6 +14,8 @@ use scoped_arena::Scope;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 
 use super::{Channel, ChannelError, ChannelFuture, Listener};
+
+const MAX_PACKET_SIZE: usize = 1 << 18;
 
 #[must_use = "futures do nothing unless you `.await` or poll them"]
 pub struct TcpSend<'a> {
@@ -32,6 +34,7 @@ impl Future for TcpSend<'_> {
                 me.buf = &me.buf[written..];
                 me.stream.poll_write_ready(cx)
             }
+            Err(err) if err.kind() == ErrorKind::WouldBlock => me.stream.poll_write_ready(cx),
             Err(err) => Poll::Ready(Err(err)),
         }
     }
@@ -58,7 +61,7 @@ struct RecvBuf {
 impl RecvBuf {
     fn new() -> Self {
         RecvBuf {
-            buf: vec![0u64; 16192].into_boxed_slice(),
+            buf: vec![0u64; MAX_PACKET_SIZE].into_boxed_slice(),
         }
     }
 
@@ -105,15 +108,17 @@ impl Channel for TcpChannel {
         S: Schema,
         P: Pack<S>,
     {
-        let ptr = scope.alloc(Layout::from_size_align(65536, S::align()).unwrap());
+        let ptr = scope.alloc(Layout::from_size_align(MAX_PACKET_SIZE, S::align()).unwrap());
 
         let buf = unsafe {
             let ptr = ptr.as_ptr();
-            std::ptr::write_bytes(ptr as *mut u8, 0xfe, 65536);
+            std::ptr::write_bytes(ptr as *mut u8, 0xfe, MAX_PACKET_SIZE);
             &mut *ptr
         };
 
         let size = alkahest::write(&mut buf[size_of::<TcpHeader>()..], packet);
+
+        // tracing::error!("Sending packet: {} bytes", size);
 
         if u32::try_from(size).is_err() {
             panic!("Packet is too large");

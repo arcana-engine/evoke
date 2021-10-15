@@ -29,14 +29,13 @@ enum ClientState {
 struct Client<C> {
     state: ClientState,
     last_input_step: u64,
+    next_update_step: u64,
     channel: C,
 }
 
 pub struct ServerSession<C, L> {
     listener: L,
-    step_delta_ns: u64,
     current_step: u64,
-    current_step_ns: u64,
     clients: HashMap<NonZeroU64, Client<C>>,
     next_client_id: NonZeroU64,
 }
@@ -50,7 +49,6 @@ pub enum Event<'a, C, P: Schema, I: Schema> {
 
 pub struct ClientConnectEvent<'a, C> {
     client: &'a mut Client<C>,
-    step_delta_ns: u64,
     current_step: u64,
 }
 
@@ -66,7 +64,6 @@ where
             .send_reliable::<ServerMessage, _>(
                 ServerMessageConnectedPack {
                     step: self.current_step,
-                    step_delta_ns: self.step_delta_ns,
                 },
                 scope,
             )
@@ -149,12 +146,10 @@ where
     L: Listener<Channel = C>,
 {
     /// Create new server session via specified channel.
-    pub fn new(listener: L, step_delta_ns: u64) -> Self {
+    pub fn new(listener: L) -> Self {
         ServerSession {
             listener,
-            step_delta_ns,
             current_step: 0,
-            current_step_ns: 0,
             clients: HashMap::new(),
             next_client_id: unsafe {
                 // # Safety
@@ -170,37 +165,32 @@ where
 
     /// Advances server-side simulation by one step.
     /// Broadcasts updates to all clients.
-    pub async fn advance<U, K>(&mut self, delta_ns: u64, updates: K, scope: &Scope<'_>)
+    pub async fn advance<'a, U, F, K>(&mut self, mut updates: F, scope: &Scope<'_>)
     where
         U: Schema,
-        K: Pack<U> + Clone,
+        F: FnMut(u64) -> K,
+        K: Pack<U>,
     {
-        self.current_step_ns += delta_ns;
-        if self.current_step_ns > self.step_delta_ns {
-            let steps = self.current_step_ns / self.step_delta_ns;
-            self.current_step_ns %= self.step_delta_ns;
-            self.current_step += steps;
+        for client in self.clients.values_mut() {
+            if let ClientState::Connected = client.state {
+                let result = client
+                    .channel
+                    .send::<ServerMessage<(), U>, _>(
+                        ServerMessageUpdatesPack {
+                            updates: updates(self.current_step - client.next_update_step),
+                            server_step: self.current_step,
+                        },
+                        scope,
+                    )
+                    .await;
 
-            for client in self.clients.values_mut() {
-                if let ClientState::Connected = client.state {
-                    let result = client
-                        .channel
-                        .send::<ServerMessage<(), U>, _>(
-                            ServerMessageUpdatesPack {
-                                updates: updates.clone(),
-                                server_step: self.current_step,
-                            },
-                            scope,
-                        )
-                        .await;
-
-                    if let Err(err) = result {
-                        tracing::error!("Client channel error: {}", err);
-                        client.state = ClientState::Disconnected;
-                    }
+                if let Err(err) = result {
+                    tracing::error!("Client channel error: {}", err);
+                    client.state = ClientState::Disconnected;
                 }
             }
         }
+        self.current_step += 1;
     }
 
     pub fn events<'a, P, I>(
@@ -211,7 +201,6 @@ where
         P: Schema,
         I: Schema,
     {
-        let step_delta_ns = self.step_delta_ns;
         let current_step = self.current_step;
 
         self.clients
@@ -225,6 +214,7 @@ where
                         state: ClientState::Pending,
                         channel,
                         last_input_step: 0,
+                        next_update_step: 0,
                     };
 
                     self.clients.insert(self.next_client_id, client);
@@ -246,7 +236,6 @@ where
                             cid,
                             Event::ClientConnect(ClientConnectEvent {
                                 client,
-                                step_delta_ns,
                                 current_step,
                             }),
                         ))
@@ -262,8 +251,13 @@ where
                         Some((cid, Event::Disconnected))
                     }
                 }
-                Ok(Some(ClientMessageUnpacked::Inputs { step, inputs })) => {
+                Ok(Some(ClientMessageUnpacked::Inputs {
+                    step,
+                    next_update_step,
+                    inputs,
+                })) => {
                     if let ClientState::Connected = client.state {
+                        client.next_update_step = next_update_step;
                         if client.last_input_step <= step {
                             client.last_input_step = step;
                             Some((cid, Event::Inputs(InputsEvent { inputs, step })))

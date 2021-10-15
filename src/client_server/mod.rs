@@ -87,6 +87,7 @@ enum ClientMessage<P: Schema = (), I: Schema = ()> {
     },
     Inputs {
         step: u64,
+        next_update_step: u64,
         inputs: Seq<(PlayerId, I)>,
     },
 }
@@ -94,7 +95,7 @@ enum ClientMessage<P: Schema = (), I: Schema = ()> {
 #[allow(unused)]
 #[derive(Schema)]
 enum ServerMessage<J: Schema = (), U: Schema = ()> {
-    Connected { step: u64, step_delta_ns: u64 },
+    Connected { step: u64 },
     PlayerJoined { info: J },
     Updates { server_step: u64, updates: U },
 }
