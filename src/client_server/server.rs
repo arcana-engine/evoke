@@ -203,8 +203,22 @@ where
     {
         let current_step = self.current_step;
 
+        let disconnected = self
+            .clients
+            .iter()
+            .filter_map(|(cid, client)| match client.state {
+                ClientState::Disconnected => Some(*cid),
+                _ => None,
+            });
+
+        let disconnected = scope.to_scope_from_iter(disconnected);
+
+        let disconnected_events = disconnected
+            .iter()
+            .map(|cid| (ClientId(*cid), Event::Disconnected));
+
         self.clients
-            .retain(|_, client| client.state != ClientState::Disconnected);
+            .retain(|_, client| !matches!(client.state, ClientState::Disconnected));
 
         loop {
             match self.listener.try_accept()? {
@@ -277,6 +291,6 @@ where
             }
         });
 
-        Ok(events)
+        Ok(disconnected_events.chain(events))
     }
 }
