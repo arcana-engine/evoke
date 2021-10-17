@@ -37,7 +37,7 @@ where
     pub async fn new(channel: C, scope: &Scope<'_>) -> Result<Self, ClientError<C::Error>> {
         let mut channel = channel;
         channel
-            .send_reliable::<ClientMessage, _>(ClientMessageConnectPack { token: "astral" }, scope)
+            .send_reliable::<ClientMessage, _>(ClientMessageConnectPack { token: "lloth" }, scope)
             .await?;
 
         loop {

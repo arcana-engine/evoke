@@ -7,7 +7,7 @@ use std::{
 };
 
 use alkahest::{Schema, Str};
-use astral::{
+use lloth::{
     channel::{tcp::TcpChannel, Channel, ChannelError},
     client_server::{ClientSession, Event, PlayerId, ServerError, ServerSession},
 };

@@ -1,12 +1,12 @@
-# astral
+# lloth
 
-[![crates](https://img.shields.io/crates/v/astral.svg?style=for-the-badge&label=astral)](https://crates.io/crates/astral)
-[![docs](https://img.shields.io/badge/docs.rs-astral-66c2a5?style=for-the-badge&labelColor=555555&logoColor=white)](https://docs.rs/astral)
-[![actions](https://img.shields.io/github/workflow/status/zakarumych/astral/badge/master?style=for-the-badge)](https://github.com/zakarumych/astral/actions?query=workflow%3ARust)
+[![crates](https://img.shields.io/crates/v/lloth.svg?style=for-the-badge&label=lloth)](https://crates.io/crates/lloth)
+[![docs](https://img.shields.io/badge/docs.rs-lloth-66c2a5?style=for-the-badge&labelColor=555555&logoColor=white)](https://docs.rs/lloth)
+[![actions](https://img.shields.io/github/workflow/status/zakarumych/lloth/badge/master?style=for-the-badge)](https://github.com/zakarumych/lloth/actions?query=workflow%3ARust)
 [![MIT/Apache](https://img.shields.io/badge/license-MIT%2FApache-blue.svg?style=for-the-badge)](COPYING)
-![loc](https://img.shields.io/tokei/lines/github/zakarumych/astral?style=for-the-badge)
+![loc](https://img.shields.io/tokei/lines/github/zakarumych/lloth?style=for-the-badge)
 
-Astral is game-oriented networking library
+lloth is game-oriented networking library
 
 ## License
 

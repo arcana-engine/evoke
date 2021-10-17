@@ -1,5 +1,5 @@
 //!
-//! Astral is game-oriented networking library.
+//! lloth is game-oriented networking library.
 //!
 
 pub mod channel;
