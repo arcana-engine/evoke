@@ -1,18 +1,16 @@
 use std::{
-    alloc::Layout,
-    future::Future,
     net::Ipv4Addr,
     num::NonZeroU64,
     time::{Duration, Instant},
 };
 
 use alkahest::{Schema, Str};
-use lloth::{
-    channel::{tcp::TcpChannel, Channel, ChannelError},
-    client_server::{ClientSession, Event, PlayerId, ServerError, ServerSession},
+use lloth::core::{
+    channel::tcp::TcpChannel,
+    client_server::{ClientSession, Event, PlayerId, ServerSession},
 };
 use scoped_arena::Scope;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 
 #[derive(Schema)]
 struct TestJoinInfo {
@@ -35,7 +33,6 @@ async fn main() {
     set.spawn_local(async move {
         let mut scope = Scope::new();
         let mut next_step = Instant::now();
-        let mut last_advance = next_step;
 
         loop {
             scope.reset();
@@ -48,19 +45,15 @@ async fn main() {
                 .expect("Failed to poll server session events")
             {
                 match event {
-                    Err(ServerError::UnexpectedMessage) => {
-                        panic!("Client {:?} sent invalid event", cid,);
-                    }
-                    Err(ServerError::ChannelError { source }) => {
-                        panic!("Client {:?} channel failed: {}", cid, source);
-                    }
-                    Ok(Event::ClientConnect(event)) => {
+                    Event::ClientConnect(event) => {
+                        println!("New client: {:?}", cid);
+
                         event
                             .accept(&scope)
                             .await
                             .expect("Failed to accept new client");
                     }
-                    Ok(Event::AddPlayer(event)) => {
+                    Event::AddPlayer(event) => {
                         println!("New player info: {}", event.player());
 
                         event
@@ -73,19 +66,19 @@ async fn main() {
                             .await
                             .expect("Failed to accept new player")
                     }
-                    Ok(Event::Inputs(event)) => {
+                    Event::Inputs(event) => {
                         for (player, input) in event.inputs() {
                             println!("New player {:?} input: {}", player, input);
                         }
                     }
+                    Event::Disconnected => {
+                        println!("Client disconnected");
+                        return;
+                    }
                 }
             }
 
-            let now = Instant::now();
-            let delta = (now - last_advance).as_nanos() as u64;
-            last_advance = now;
-
-            server.advance::<Str, _>(delta, "qwe", &scope).await;
+            server.advance::<Str, _, _>(|_| "qwe", &scope).await;
         }
     });
 
@@ -116,7 +109,7 @@ async fn main() {
                 .expect("Failed to send inputs to server");
 
             if let Some(updates) = client
-                .advance::<Str>(16666666, &scope)
+                .advance::<Str>(&scope)
                 .expect("Failed to advance client")
             {
                 println!("Updates: {} at {}", updates.updates, updates.server_step);
