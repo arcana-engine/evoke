@@ -1,12 +1,9 @@
-use std::{
-    collections::hash_map::{Entry, HashMap},
-    mem::align_of,
-    num::NonZeroU64,
-};
+use std::{collections::HashMap, mem::align_of, num::NonZeroU64};
 
 use alkahest::{Pack, Schema, SchemaUnpack};
+#[cfg(feature = "server")]
 use evoke_core::client_server::PlayerId;
-use hecs::{Entity, QueryOneError, World};
+use hecs::{Entity, World};
 
 /// Value that is replicated instead of `Entity`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -46,10 +43,12 @@ impl Pack<NetId> for &'_ NetId {
     }
 }
 
+#[cfg(feature = "server")]
 pub(crate) struct IdGen {
     next: NonZeroU64,
 }
 
+#[cfg(feature = "server")]
 impl IdGen {
     pub fn new() -> Self {
         IdGen {
@@ -57,14 +56,17 @@ impl IdGen {
         }
     }
 
+    #[cfg(feature = "server")]
     pub fn gen_nid(&mut self) -> NetId {
         NetId(self.gen())
     }
 
+    #[cfg(feature = "server")]
     pub fn gen_pid(&mut self) -> PlayerId {
         PlayerId(self.gen())
     }
 
+    #[cfg(feature = "server")]
     pub fn gen(&mut self) -> NonZeroU64 {
         let id = self.next;
         let next = self
@@ -100,6 +102,9 @@ impl EntityMapper {
     #[cfg(feature = "client")]
     #[inline]
     pub fn get_or_spawn(&mut self, world: &mut World, nid: NetId) -> Entity {
+        use hecs::QueryOneError;
+        use std::collections::hash_map::Entry;
+
         match self.entity_by_id.entry(nid) {
             Entry::Occupied(mut entry) => {
                 let entity = *entry.get();
