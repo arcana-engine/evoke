@@ -1,26 +1,26 @@
 [package]
-name = "lloth"
+name = "evoke"
 version = "0.1.0"
 edition = "2018"
 authors = ["Zakarum <zakarumych@ya.ru>"]
 license = "MIT OR Apache-2.0"
-documentation = "https://docs.rs/lloth"
-homepage = "https://github.com/zakarumych/lloth"
-repository = "https://github.com/zakarumych/lloth"
+documentation = "https://docs.rs/evoke"
+homepage = "https://github.com/zakarumych/evoke"
+repository = "https://github.com/zakarumych/evoke"
 readme = "README.md"
 description = "Powerful netcode for hecs based game engines"
 categories = ["network-programming", "game-development"]
 keywords = ["netcode", "multiplayer", "authoritative-server", "hecs"]
 
 [features]
-tcp = ["tokio/net", "lloth-core/tcp"]
+tcp = ["tokio/net", "evoke-core/tcp"]
 default = ["tcp"]
 
 client = []
 server = []
 
 [dependencies]
-lloth-core = { version = "0.1.0", path = "core" }
+evoke-core = { version = "0.1.0", path = "core" }
 
 alkahest = { version = "0.1" }
 scoped-arena = "0.3"

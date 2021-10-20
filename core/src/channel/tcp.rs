@@ -54,27 +54,10 @@ impl Future for TcpRecvReady<'_> {
     }
 }
 
-struct RecvBuf {
-    buf: Box<[u64]>,
-}
-
-impl RecvBuf {
-    fn new() -> Self {
-        RecvBuf {
-            buf: vec![0u64; MAX_PACKET_SIZE].into_boxed_slice(),
-        }
-    }
-
-    fn bytes(&mut self) -> &mut [u8] {
-        let len = size_of_val(&self.buf[..]);
-        let ptr = &mut self.buf[0] as *mut u64 as *mut u8;
-        unsafe { std::slice::from_raw_parts_mut(ptr, len) }
-    }
-}
-
 pub struct TcpChannel {
     stream: TcpStream,
-    buf: RecvBuf,
+    buf: Box<[u8]>,
+    buf_off: usize,
     buf_len: usize,
 }
 
@@ -82,7 +65,8 @@ impl TcpChannel {
     pub fn new(stream: TcpStream) -> Self {
         TcpChannel {
             stream,
-            buf: RecvBuf::new(),
+            buf: vec![0u8; MAX_PACKET_SIZE].into_boxed_slice(),
+            buf_off: 0,
             buf_len: 0,
         }
     }
@@ -167,7 +151,25 @@ impl Channel for TcpChannel {
         // Get header
         let header = loop {
             if self.buf_len < size_of::<TcpHeader>() {
-                let result = self.stream.try_read(&mut self.buf.bytes()[self.buf_len..]);
+                debug_assert!(size_of::<TcpHeader>() <= self.buf.len());
+
+                if self.buf_off > self.buf.len() - size_of::<TcpHeader>() {
+                    debug_assert!(self.buf_len < self.buf_off);
+
+                    // Rotate buf
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            self.buf.as_ptr().add(self.buf_off),
+                            self.buf.as_mut_ptr(),
+                            self.buf_len,
+                        );
+                    }
+                    self.buf_off = 0;
+                }
+
+                let result = self
+                    .stream
+                    .try_read(&mut self.buf[self.buf_off + self.buf_len..]);
 
                 match result {
                     Ok(read) => {
@@ -187,7 +189,7 @@ impl Channel for TcpChannel {
 
                 unsafe {
                     copy_nonoverlapping(
-                        self.buf.bytes().as_ptr(),
+                        self.buf[self.buf_off..].as_ptr(),
                         &mut header as *mut TcpHeader as *mut u8,
                         size_of::<TcpHeader>(),
                     );
@@ -195,14 +197,8 @@ impl Channel for TcpChannel {
 
                 // Check magic value
                 if u32::from_le(header.magic) != MAGIC {
-                    unsafe {
-                        // Rotate buf
-                        std::ptr::copy(
-                            self.buf.bytes().as_ptr().add(1),
-                            self.buf.bytes().as_mut_ptr(),
-                            self.buf_len - 1,
-                        );
-                    }
+                    tracing::error!("Bad byte");
+                    self.buf_off += 1;
                     continue;
                 }
 
@@ -214,8 +210,34 @@ impl Channel for TcpChannel {
 
         // Get payload
         let payload = loop {
-            if self.buf_len < size_of::<TcpHeader>() + size {
-                let result = self.stream.try_read(&mut self.buf.bytes()[self.buf_len..]);
+            if self.buf_len - size_of::<TcpHeader>() < size {
+                assert!(size_of::<TcpHeader>() + size < self.buf.len());
+
+                if self.buf_off > self.buf.len() - size_of::<TcpHeader>() - size {
+                    // Rotate buf
+                    if self.buf_len < self.buf_off {
+                        unsafe {
+                            std::ptr::copy_nonoverlapping(
+                                self.buf.as_ptr().add(self.buf_off),
+                                self.buf.as_mut_ptr(),
+                                self.buf_len,
+                            );
+                        }
+                    } else {
+                        unsafe {
+                            std::ptr::copy(
+                                self.buf.as_ptr().add(self.buf_off),
+                                self.buf.as_mut_ptr(),
+                                self.buf_len,
+                            );
+                        }
+                    }
+                    self.buf_off = 0;
+                }
+
+                let result = self
+                    .stream
+                    .try_read(&mut self.buf[self.buf_off + self.buf_len..]);
 
                 match result {
                     Ok(read) => {
@@ -231,22 +253,23 @@ impl Channel for TcpChannel {
 
                 continue;
             } else {
-                break scope.to_scope_from_iter(
-                    self.buf.bytes()[size_of::<TcpHeader>()..].iter().copied(),
-                );
+                let ptr = scope.alloc(Layout::from_size_align(size, S::align()).unwrap());
+
+                let buf = unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        self.buf[self.buf_off + size_of::<TcpHeader>()..].as_ptr(),
+                        ptr.as_ptr() as *mut u8,
+                        size,
+                    );
+                    std::slice::from_raw_parts(ptr.as_ptr() as *mut u8, size)
+                };
+
+                break buf;
             }
         };
 
-        // Move buf tail
-        unsafe {
-            std::ptr::copy(
-                self.buf.bytes().as_ptr().add(size_of::<TcpHeader>() + size),
-                self.buf.bytes().as_mut_ptr(),
-                self.buf_len - size + size_of::<TcpHeader>(),
-            );
-        }
-
-        self.buf_len -= size + size_of::<TcpHeader>();
+        self.buf_off += size_of::<TcpHeader>() + size;
+        self.buf_len -= size_of::<TcpHeader>() + size;
 
         let unpacked = alkahest::read::<S>(payload);
 

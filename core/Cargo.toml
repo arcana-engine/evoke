@@ -1,12 +1,12 @@
 [package]
-name = "lloth-core"
+name = "evoke-core"
 version = "0.1.0"
 edition = "2018"
 authors = ["Zakarum <zakarumych@ya.ru>"]
 license = "MIT OR Apache-2.0"
-documentation = "https://docs.rs/lloth-core"
-homepage = "https://github.com/zakarumych/lloth"
-repository = "https://github.com/zakarumych/lloth"
+documentation = "https://docs.rs/evoke-core"
+homepage = "https://github.com/zakarumych/evoke"
+repository = "https://github.com/zakarumych/evoke"
 readme = "../README.md"
 description = "Core layer for client-server netcode"
 categories = ["network-programming", "game-development"]

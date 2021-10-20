@@ -3,7 +3,7 @@
 //! ## Usage
 //!
 //! ```
-//! # use {lloth::server::{ServerSystem, DummyRemotePlayer}, core::marker::PhantomData};
+//! # use {evoke::server::{ServerSystem, DummyRemotePlayer}, core::marker::PhantomData};
 //! # async fn server<'a>(world: &'a mut hecs::World, scope: &'a scoped_arena::Scope<'a>) -> eyre::Result<()> {
 //! let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, 12345)).await?;
 //!
@@ -34,11 +34,11 @@ use alkahest::{Bytes, FixedUsize, Pack};
 
 use bincode::Options as _;
 use bitsetium::{BitEmpty, BitSet, BitTestNone};
-use hecs::{Component, Entity, Fetch, Query, World};
-use lloth_core::{
+use evoke_core::{
     channel::tcp::TcpChannel,
     client_server::{ClientId, Event, PlayerId, ServerSession},
 };
+use hecs::{Component, Entity, Fetch, Query, World};
 use scoped_arena::Scope;
 use tokio::net::TcpListener;
 use tracing::instrument;
@@ -444,7 +444,7 @@ pub trait RemotePlayer: Send + Sync + 'static {
 
     /// Process input sent by associated player.
     /// This function is called for each entity that receives commands from the player.
-    fn apply_input(entity: Entity, world: &mut World, pack: Self::Input);
+    fn apply_input(&mut self, entity: Entity, world: &mut World, pack: Self::Input);
 }
 
 /// This type is dummy implementation of [`RemotePlayer`] trait.
@@ -456,7 +456,7 @@ impl RemotePlayer for DummyRemotePlayer {
     fn accept(_info: Self::Info, _pid: PlayerId, _world: &mut World) -> eyre::Result<Self> {
         Ok(DummyRemotePlayer)
     }
-    fn apply_input(_entity: Entity, _world: &mut World, _pack: Self::Input) {}
+    fn apply_input(&mut self, _entity: Entity, _world: &mut World, _pack: Self::Input) {}
 }
 
 /// This type implements builder-pattern to configure [`ServerSystem`].
@@ -653,7 +653,7 @@ where
                             current_step
                         );
                         for (pid, (nid_res, input)) in event.inputs() {
-                            if players.contains_key(&pid) {
+                            if let Some(player) = players.get_mut(&pid) {
                                 match nid_res {
                                     Err(err) => {
                                         tracing::error!("{:?}", err)
@@ -671,7 +671,11 @@ where
                                                     );
                                                 }
                                                 Ok(pack) => {
-                                                    P::apply_input(entity, world, pack);
+                                                    let player = player
+                                                        .player
+                                                        .downcast_mut::<P>()
+                                                        .expect("Invalid player type");
+                                                    player.apply_input(entity, world, pack);
                                                 }
                                             }
                                         }
@@ -686,11 +690,11 @@ where
                         let ids = &*scope.to_scope_from_iter(
                             players
                                 .iter()
-                                .filter_map(|(id, player)| (player.cid == cid).then(|| *id)),
+                                .filter_map(|(pid, player)| (player.cid == cid).then(|| *pid)),
                         );
 
-                        for id in ids {
-                            let player = players.remove(id).unwrap();
+                        for pid in ids {
+                            let player = players.remove(pid).unwrap();
                             let player =
                                 player.player.downcast::<P>().expect("Invalid player type");
                             player.disconnected(world);

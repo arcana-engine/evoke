@@ -1,28 +1,28 @@
 //!
-//! Lloth provides basic building blocks to add networking capabilities to game engines.
+//! Evoke provides basic building blocks to add networking capabilities to game engines.
 //!
-//! Lloth supports:
+//! Evoke supports:
 //! * Client-Server model with authoritative server
 //!
 //! ## Client-Server
 //!
-//! For client-server model `lloth` automatically performs state replication with delta compression from server to client\
+//! For client-server model `evoke` automatically performs state replication with delta compression from server to client\
 //! and commands replication from clients to server.
 //!
-//! Lloth makes no assumption of components used in the game.\
+//! Evoke makes no assumption of components used in the game.\
 //! User needs to register [`server::Descriptor`] in server and [`client::Descriptor`] in client for components that need to be replicated.
 //! There're blanket implementations for components that are comparable for equality and serializable.\
 //! For [server] and for [client].
 //!
 //! ## Core
 //!
-//! Lloth's core provides very abstract client and server sessions,
+//! Evoke's core provides very abstract client and server sessions,
 //! supporting sending and receiving commands like
 //! `Connect`, `AddPlayer`, `SendInput`, `Update` etc
 //! with generic payload.
-//! Lloth's core is available as separate crate `lloth-core` and re-exported from this crate as `lloth::core`
+//! Evoke's core is available as separate crate `evoke-core` and re-exported from this crate as `evoke::core`
 //!
-//! Unlike the `lloth` (this one) `lloth-core` does not depends on `hecs` and can be used
+//! Unlike the `evoke` (this one) `evoke-core` does not depends on `hecs` and can be used
 //! in any game engine, even written in language other than Rust if packed into FFI-ready library.
 //!
 //! [server]: server/trait.Descriptor.html#impl-Descriptor
@@ -32,9 +32,9 @@ use std::mem::align_of;
 
 use alkahest::{FixedUsize, Schema, SchemaUnpack};
 use bincode::Options;
-pub use lloth_core::client_server::PlayerId;
+pub use evoke_core::client_server::PlayerId;
 
-pub use lloth_core as core;
+pub use evoke_core as core;
 
 mod nid;
 

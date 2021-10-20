@@ -5,8 +5,8 @@ use std::{
 };
 
 use alkahest::{Pack, Schema, SchemaUnpack};
+use evoke_core::client_server::PlayerId;
 use hecs::{Entity, QueryOneError, World};
-use lloth_core::client_server::PlayerId;
 
 /// Value that is replicated instead of `Entity`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

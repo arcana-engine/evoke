@@ -3,7 +3,7 @@
 //! ## Usage
 //!
 //! ```
-//! # use {lloth::client::{ClientSystem, DummyLocalPlayer}, core::marker::PhantomData};
+//! # use {evoke::client::{ClientSystem, DummyLocalPlayer}, core::marker::PhantomData};
 //! # async fn client<'a>(world: &'a mut hecs::World, scope: &'a scoped_arena::Scope<'a>) -> eyre::Result<()> {
 //! #[derive(serde::Deserialize)]
 //! struct Foo;
@@ -31,12 +31,12 @@ use std::{
 use alkahest::{Bytes, FixedUsize, Pack};
 use bincode::Options as _;
 use bitsetium::BitTest;
-use eyre::WrapErr as _;
-use hecs::{Component, Entity, Fetch, Query, World};
-use lloth_core::{
+use evoke_core::{
     channel::tcp::TcpChannel,
     client_server::{ClientSession, PlayerId},
 };
+use eyre::WrapErr as _;
+use hecs::{Component, Entity, Fetch, Query, World};
 use scoped_arena::Scope;
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tracing::instrument;
@@ -76,11 +76,11 @@ pub trait Descriptor: 'static {
 
     /// Insert components managed by this descriptor.
     /// This method is called during replication if descriptor's query cannot be satisfied.
-    fn insert(pack: DescriptorPackType<Self>, entity: Entity, world: &mut World);
+    fn insert(pack: Self::Pack, entity: Entity, world: &mut World);
 
     /// Modify components managed by this descriptor.
     /// This method is called during replication if descriptor's query is satisfied.
-    fn modify(pack: DescriptorPackType<Self>, item: DescriptorFetchItem<'_, Self>);
+    fn modify(pack: Self::Pack, item: DescriptorFetchItem<'_, Self>);
 
     /// Remove components managed by this descriptor.
     /// This method is called during replication if descriptor's query is satisfied.
@@ -283,6 +283,7 @@ pub trait LocalPlayer: for<'a> LocalPlayerPack<'a> + 'static {
     /// Returns serializable data containing all commands for an entity.
     fn replicate<'a>(
         item: <<Self::Query as Query>::Fetch as Fetch<'a>>::Item,
+        scope: &'a Scope<'_>,
     ) -> LocalPlayerPackType<'a, Self>;
 }
 
@@ -298,6 +299,7 @@ impl LocalPlayer for DummyLocalPlayer {
 
     fn replicate<'a>(
         item: <<Self::Query as Query>::Fetch as Fetch<'a>>::Item,
+        scope: &'a Scope<'_>,
     ) -> LocalPlayerPackType<'a, Self> {
         item
     }
@@ -531,7 +533,7 @@ where
                     (
                         *nid,
                         InputPack {
-                            input: P::replicate(input),
+                            input: P::replicate(input, scope),
                         },
                     ),
                 )
@@ -562,15 +564,8 @@ where
     R: Replicator,
     B: BitTest + serde::de::DeserializeOwned,
 {
-    let updates = session.advance::<WorldSchema>(scope)?;
-
-    // while let Some(fresher) = session.advance::<WorldSchema>(scope)? {
-    //     updates = Some(fresher);
-    // }
-
-    if let Some(updates) = updates {
+    while let Some(updates) = session.advance::<WorldSchema>(scope)? {
         tracing::debug!("Received updates ({})", updates.server_step);
-
         R::replicate::<B>(updates.updates, mapper, world, scope)?;
     }
 

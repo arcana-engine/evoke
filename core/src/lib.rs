@@ -1,5 +1,5 @@
 //!
-//! lloth is game-oriented networking library.
+//! evoke is game-oriented networking library.
 //!
 
 pub mod channel;

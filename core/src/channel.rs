@@ -15,7 +15,7 @@ pub trait ChannelFuture<'a>: ChannelError {
     type Ready: Future<Output = Result<(), Self::Error>>;
 }
 
-/// Abstract raw bytes channel that can be used by `lloth` sessions.
+/// Abstract raw bytes channel that can be used by `evoke` sessions.
 pub trait Channel: ChannelError + for<'a> ChannelFuture<'a> {
     /// Attempts to send packet through the channel unreliably.
     /// Packet either arrives complete or lost.

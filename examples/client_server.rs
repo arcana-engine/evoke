@@ -5,7 +5,7 @@ use std::{
 };
 
 use alkahest::{Schema, Str};
-use lloth::core::{
+use evoke::core::{
     channel::tcp::TcpChannel,
     client_server::{ClientSession, Event, PlayerId, ServerSession},
 };

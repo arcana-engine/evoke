@@ -1,21 +1,103 @@
-# lloth
+# evoke - easy netcode
 
-[![crates](https://img.shields.io/crates/v/lloth.svg?style=for-the-badge&label=lloth)](https://crates.io/crates/lloth)
-[![docs](https://img.shields.io/badge/docs.rs-lloth-66c2a5?style=for-the-badge&labelColor=555555&logoColor=white)](https://docs.rs/lloth)
-[![actions](https://img.shields.io/github/workflow/status/zakarumych/lloth/badge/master?style=for-the-badge)](https://github.com/zakarumych/lloth/actions?query=workflow%3ARust)
+[![crates](https://img.shields.io/crates/v/evoke.svg?style=for-the-badge&label=evoke)](https://crates.io/crates/evoke)
+[![docs](https://img.shields.io/badge/docs.rs-evoke-66c2a5?style=for-the-badge&labelColor=555555&logoColor=white)](https://docs.rs/evoke)
+[![actions](https://img.shields.io/github/workflow/status/zakarumych/evoke/badge/master?style=for-the-badge)](https://github.com/zakarumych/evoke/actions?query=workflow%3ARust)
 [![MIT/Apache](https://img.shields.io/badge/license-MIT%2FApache-blue.svg?style=for-the-badge)](COPYING)
-![loc](https://img.shields.io/tokei/lines/github/zakarumych/lloth?style=for-the-badge)
+![loc](https://img.shields.io/tokei/lines/github/zakarumych/evoke?style=for-the-badge)
 
-Lloth provides basic building blocks to add networking capabilities to game engine.
+Evoke provides building blocks to add networking capabilities to game engines.
 
-Lloth supports:
+Evoke supports:
 * Client-Server model with authoritative server
 
-For client-server model `lloth` automatically performs state replication with delta compression from server to client\
-and commands replication from client to server.
 
-Lloth makes no assumption of game loop and components used in game.\
-User needs to register `lloth::server::Descriptor` in server and `lloth::client::Descriptor` in client for components that need to be replicated. There's blanket implementation for components that are comparable for equality and serializable.
+## Client-Server
+
+For client-server model Evoke automatically performs state replication with delta compression from server to client\
+and commands replication from clients to server.
+
+Evoke makes no assumption of components used in the game.\
+User needs to register [`server::Descriptor`] in server and [`client::Descriptor`] in client for components that need to be replicated.
+There're blanket implementations for components that are comparable for equality and serializable.\
+For [**server**] and for [**client**].
+
+## Core
+
+Evoke's core provides very abstract client and server sessions,
+supporting sending and receiving commands like
+`Connect`, `AddPlayer`, `SendInput`, `Update` etc
+with generic payload.
+Evoke's core is available as separate crate `evoke-core` and re-exported from this crate as `evoke::core`
+
+Unlike the `evoke` crate (this one) `evoke-core` does not depends on `hecs` and can be used
+in any game engine, even written in language other than Rust if packed into FFI-ready library.
+
+## Usage
+
+To start using Evoke simply configure and run `ServerSystem` and `ClientSystem` on server and client respectively.
+To configure `ServerSystem` provide descriptors for components replication and `RemotePlayer` implementation.
+
+```
+use evoke::server::{ServerSystem, RemotePlayer};
+
+/// Information associated with player.
+#[derive(serde::Deserialize)]
+struct MyPlayerInfo;
+
+/// Player input serializable representation.
+#[derive(serde::Deserialize)]
+struct MyPlayerInput;
+
+/// This type drives player lifecycle and input processing.
+struct MyRemotePlayer;
+
+impl RemotePlayer for MyRemotePlayer {
+    type Info = MyPlayerInfo`
+    type Input = MyPlayerInput`
+
+    fn accept(info: MyPlayerInfo, pid: PlayerId, world: &mut World) -> eyre::Result<Self> {
+        // Decide here whether accept new player based on `info` provided.
+        // `Ok` signals that player is accepted.
+        // `Err` signals that player is rejected.
+        Ok(MyRemotePlayer)
+    }
+
+    fn apply_input(entity: Entity, world: &mut World, pack: MyPlayerInput) {
+        // Input is associated with provided entity.
+        // This code should transform input and put it where other systems would be able to consume it properly.
+        // Usually it do the reverse of [`client::LocalPlayer::replicate`].
+    }
+}
+
+/// Component that is own descriptor.
+#[derive(Clone, Copy, PartialEq, serde::Serialize)]
+pub struct MyComponent;
+
+/// Prepare channel listener.
+let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 12523)).await?;
+
+/// Build server system.
+let mut server = ServerSystem::builder()
+    .with_descriptor::<MyComponent>()
+    .with_player::<MyRemotePlayer>()
+    .build(listener);
+
+// game loop
+loop {
+    //
+    // Game loop tick
+    //
+
+    // Run server every tick.
+    server.run(&mut World, &scope);
+}
+```
+
+[`server::Descriptor`]: https://docs.rs/evoke/0.1.0/evoke/server/trait.Descriptor.html
+[`client::Descriptor`]: https://docs.rs/evoke/0.1.0/evoke/client/trait.Descriptor.html
+[**server**]: https://docs.rs/evoke/0.1.0/evoke/server/trait.Descriptor.html#impl-Descriptor
+[**client**]: https://docs.rs/evoke/0.1.0/evoke/client/trait.Descriptor.html#impl-Descriptor
 
 ## License
 
