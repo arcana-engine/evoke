@@ -41,7 +41,6 @@ To start using Evoke simply configure and run `ServerSystem` and `ClientSystem` 
 To configure `ServerSystem` provide descriptors for components replication and `RemotePlayer` implementation.
 
 ```rust
-# async fn foo() -> eyre::Result<()> {
 /// Information associated with player.
 #[derive(serde::Deserialize)]
 struct MyPlayerInfo;
@@ -96,14 +95,12 @@ loop {
     // Run server every tick.
     server.run(&mut world, &scope);
 }
-# Ok(()) }
 ```
 
 #### Client
 To configure `ClientSystem` provide descriptors for components replication and `LocalPlayer` implementation.
 
 ```rust
-# async fn foo() -> eyre::Result<()> {
 /// Information associated with player.
 #[derive(serde::Serialize)]
 struct MyPlayerInfo;
@@ -155,7 +152,6 @@ loop {
     // Run server every tick.
     client.run(&mut world, &scope);
 }
-# Ok(()) }
 ```
 
 [`server::Descriptor`]: https://docs.rs/evoke/0.1.0/evoke/server/trait.Descriptor.html
