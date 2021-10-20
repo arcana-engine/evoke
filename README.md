@@ -149,7 +149,7 @@ loop {
     // Game loop tick
     //
 
-    // Run server every tick.
+    // Run client every tick.
     client.run(&mut world, &scope);
 }
 ```
