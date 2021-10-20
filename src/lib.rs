@@ -31,11 +31,11 @@
 use std::mem::align_of;
 
 use alkahest::{FixedUsize, Schema, SchemaUnpack};
-use bincode::Options;
 pub use evoke_core::client_server::PlayerId;
 
 pub use evoke_core as core;
 
+#[cfg(any(feature = "server", feature = "client"))]
 mod nid;
 
 #[cfg(feature = "server")]
@@ -120,8 +120,10 @@ impl Schema for InputSchema {
     }
 }
 
+#[cfg(any(feature = "server", feature = "client"))]
 #[inline(always)]
 fn bincode_opts(
 ) -> bincode::config::WithOtherTrailing<bincode::DefaultOptions, bincode::config::AllowTrailing> {
+    use bincode::Options;
     bincode::DefaultOptions::new().allow_trailing_bytes()
 }

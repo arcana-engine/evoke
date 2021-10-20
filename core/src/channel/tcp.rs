@@ -3,7 +3,7 @@ use std::{
     convert::TryFrom,
     future::Future,
     io::{Error, ErrorKind},
-    mem::{size_of, size_of_val},
+    mem::size_of,
     pin::Pin,
     ptr::copy_nonoverlapping,
     task::{Context, Poll},

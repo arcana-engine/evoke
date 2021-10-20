@@ -83,6 +83,7 @@ pub(crate) struct EntityMapper {
     entity_by_id: HashMap<NetId, Entity>,
 }
 
+#[cfg(any(feature = "server", feature = "client"))]
 impl EntityMapper {
     #[inline(always)]
     pub fn new() -> Self {

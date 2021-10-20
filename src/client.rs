@@ -299,7 +299,7 @@ impl LocalPlayer for DummyLocalPlayer {
 
     fn replicate<'a>(
         item: <<Self::Query as Query>::Fetch as Fetch<'a>>::Item,
-        scope: &'a Scope<'_>,
+        _scope: &'a Scope<'_>,
     ) -> LocalPlayerPackType<'a, Self> {
         item
     }
