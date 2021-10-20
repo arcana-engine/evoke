@@ -36,11 +36,12 @@ in any game engine, even written in language other than Rust if packed into FFI-
 ## Usage
 
 To start using Evoke simply configure and run `ServerSystem` and `ClientSystem` on server and client respectively.
+
+#### Server
 To configure `ServerSystem` provide descriptors for components replication and `RemotePlayer` implementation.
 
-```
-use evoke::server::{ServerSystem, RemotePlayer};
-
+```rust
+# async fn foo() -> eyre::Result<()> {
 /// Information associated with player.
 #[derive(serde::Deserialize)]
 struct MyPlayerInfo;
@@ -52,18 +53,18 @@ struct MyPlayerInput;
 /// This type drives player lifecycle and input processing.
 struct MyRemotePlayer;
 
-impl RemotePlayer for MyRemotePlayer {
-    type Info = MyPlayerInfo`
-    type Input = MyPlayerInput`
+impl evoke::server::RemotePlayer for MyRemotePlayer {
+    type Info = MyPlayerInfo;
+    type Input = MyPlayerInput;
 
-    fn accept(info: MyPlayerInfo, pid: PlayerId, world: &mut World) -> eyre::Result<Self> {
+    fn accept(info: MyPlayerInfo, pid: evoke::PlayerId, world: &mut hecs::World) -> eyre::Result<Self> {
         // Decide here whether accept new player based on `info` provided.
         // `Ok` signals that player is accepted.
         // `Err` signals that player is rejected.
         Ok(MyRemotePlayer)
     }
 
-    fn apply_input(entity: Entity, world: &mut World, pack: MyPlayerInput) {
+    fn apply_input(&mut self, entity: hecs::Entity, world: &mut hecs::World, pack: MyPlayerInput) {
         // Input is associated with provided entity.
         // This code should transform input and put it where other systems would be able to consume it properly.
         // Usually it do the reverse of [`client::LocalPlayer::replicate`].
@@ -78,10 +79,13 @@ pub struct MyComponent;
 let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 12523)).await?;
 
 /// Build server system.
-let mut server = ServerSystem::builder()
+let mut server = evoke::server::ServerSystem::builder()
     .with_descriptor::<MyComponent>()
     .with_player::<MyRemotePlayer>()
     .build(listener);
+
+let mut world = hecs::World::new();
+let scope = scoped_arena::Scope::new();
 
 // game loop
 loop {
@@ -90,8 +94,68 @@ loop {
     //
 
     // Run server every tick.
-    server.run(&mut World, &scope);
+    server.run(&mut world, &scope);
 }
+# Ok(()) }
+```
+
+#### Client
+To configure `ClientSystem` provide descriptors for components replication and `LocalPlayer` implementation.
+
+```rust
+# async fn foo() -> eyre::Result<()> {
+/// Information associated with player.
+#[derive(serde::Serialize)]
+struct MyPlayerInfo;
+
+/// Player input serializable representation.
+#[derive(serde::Serialize)]
+struct MyPlayerInput;
+
+/// This type drives player lifecycle and input processing.
+struct MyLocalPlayer;
+
+impl<'a> evoke::client::LocalPlayerPack<'a> for MyLocalPlayer {
+    type Pack = &'a MyPlayerInput;
+}
+
+impl evoke::client::LocalPlayer for MyLocalPlayer {
+    type Query = &'static MyPlayerInput;
+
+    fn replicate<'a>(item: &'a MyPlayerInput, _scope: &'a scoped_arena::Scope<'_>) -> &'a MyPlayerInput {
+        item
+    }
+}
+
+/// Component that is own descriptor.
+#[derive(Clone, Copy, PartialEq, serde::Deserialize)]
+pub struct MyComponent;
+
+/// Build client system.
+let mut client = evoke::client::ClientSystem::builder()
+    .with_descriptor::<MyComponent>()
+    .with_player::<MyLocalPlayer>()
+    .build();
+
+let mut world = hecs::World::new();
+let scope = scoped_arena::Scope::new();
+
+client.connect((std::net::Ipv4Addr::LOCALHOST, 12523), &scope).await?;
+
+
+let player_id: evoke::PlayerId = client.add_player(&MyPlayerInfo, &scope).await?;
+// The player can controls all entities to which server attaches same `PlayerId` as component.
+
+// game loop
+loop {
+    //
+    // Game loop tick
+    //
+
+    // Run server every tick.
+    client.run(&mut world, &scope);
+}
+# Ok(()) }
 ```
 
 [`server::Descriptor`]: https://docs.rs/evoke/0.1.0/evoke/server/trait.Descriptor.html
