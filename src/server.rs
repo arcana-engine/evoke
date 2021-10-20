@@ -336,7 +336,7 @@ impl Replicator for () {
             #[allow(non_snake_case)]
             let (PlayerIdDescriptor,) = &mut server.history;
 
-            PlayerIdDescriptor.add(pid.map(PlayerIdDescriptor::history));
+            PlayerIdDescriptor.add(pid.map(|pid| PlayerIdDescriptor::history(pid)));
         }
     }
 
@@ -806,7 +806,7 @@ macro_rules! for_tuple {
                         $t.add($b.map($t::history));
                     )+
 
-                    PlayerIdDescriptor.add(pid.map(PlayerIdDescriptor::history));
+                    PlayerIdDescriptor.add(pid.map(|pid| PlayerIdDescriptor::history(pid)));
                 }
             }
 
