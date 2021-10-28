@@ -2,9 +2,9 @@
 
 [![crates](https://img.shields.io/crates/v/evoke.svg?style=for-the-badge&label=evoke)](https://crates.io/crates/evoke)
 [![docs](https://img.shields.io/badge/docs.rs-evoke-66c2a5?style=for-the-badge&labelColor=555555&logoColor=white)](https://docs.rs/evoke)
-[![actions](https://img.shields.io/github/workflow/status/zakarumych/evoke/badge/master?style=for-the-badge)](https://github.com/zakarumych/evoke/actions?query=workflow%3ARust)
+[![actions](https://img.shields.io/github/workflow/status/arcana-engine/evoke/badge/master?style=for-the-badge)](https://github.com/arcana-engine/evoke/actions?query=workflow%3ARust)
 [![MIT/Apache](https://img.shields.io/badge/license-MIT%2FApache-blue.svg?style=for-the-badge)](COPYING)
-![loc](https://img.shields.io/tokei/lines/github/zakarumych/evoke?style=for-the-badge)
+![loc](https://img.shields.io/tokei/lines/github/arcana-engine/evoke?style=for-the-badge)
 
 Evoke provides building blocks to add networking capabilities to game engines.
 
