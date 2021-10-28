@@ -131,7 +131,6 @@ where
 {
     pub fn inputs(&self) -> impl Iterator<Item = (PlayerId, Unpacked<'a, I>)> {
         self.inputs
-            .clone()
             .filter_map(|(pid, input)| Some((pid.ok()?, input)))
     }
 

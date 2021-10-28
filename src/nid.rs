@@ -26,7 +26,7 @@ impl Schema for NetId {
         align_of::<u64>()
     }
 
-    fn unpack<'a>(packed: u64, _input: &'a [u8]) -> Result<Self, ZeroNetIdError> {
+    fn unpack(packed: u64, _input: &[u8]) -> Result<Self, ZeroNetIdError> {
         NonZeroU64::new(packed).map(NetId).ok_or(ZeroNetIdError)
     }
 }

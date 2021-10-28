@@ -135,7 +135,7 @@ impl Channel for TcpChannel {
         self.send(packet, scope)
     }
 
-    fn recv_ready<'a>(&'a mut self) -> TcpRecvReady<'a> {
+    fn recv_ready(&mut self) -> TcpRecvReady<'_> {
         TcpRecvReady {
             stream: &mut self.stream,
         }
@@ -273,7 +273,7 @@ impl Channel for TcpChannel {
 
         let unpacked = alkahest::read::<S>(payload);
 
-        return Ok(Some(unpacked));
+        Ok(Some(unpacked))
     }
 }
 

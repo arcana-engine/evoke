@@ -41,7 +41,7 @@ where
             .await?;
 
         loop {
-            match channel.recv::<ServerMessage>(&scope) {
+            match channel.recv::<ServerMessage>(scope) {
                 Ok(Some(ServerMessageUnpacked::Connected { step })) => {
                     return Ok(ClientSession {
                         channel,
@@ -69,7 +69,7 @@ where
     pub async fn add_player<'a, P, J, K>(
         &mut self,
         player: K,
-        scope: &'a Scope<'_>,
+        scope: &'a Scope<'a>,
     ) -> Result<Unpacked<'a, J>, ClientError<C::Error>>
     where
         P: Schema,

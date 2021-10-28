@@ -1,5 +1,7 @@
 //! Client-Server kind of sessions.
 
+#![allow(clippy::eval_order_dependence, clippy::type_complexity)]
+
 use std::{mem::align_of, num::NonZeroU64};
 
 use alkahest::{Pack, Schema, SchemaUnpack, Seq};
@@ -33,7 +35,7 @@ impl Schema for PlayerId {
         align_of::<u64>()
     }
 
-    fn unpack<'a>(packed: u64, _input: &'a [u8]) -> Result<Self, ZeroPlayerIdError> {
+    fn unpack(packed: u64, _input: &[u8]) -> Result<Self, ZeroPlayerIdError> {
         NonZeroU64::new(packed)
             .map(PlayerId)
             .ok_or(ZeroPlayerIdError)
@@ -60,7 +62,7 @@ impl Schema for MaybePlayerId {
         align_of::<u64>()
     }
 
-    fn unpack<'a>(packed: u64, _input: &'a [u8]) -> Option<PlayerId> {
+    fn unpack(packed: u64, _input: &[u8]) -> Option<PlayerId> {
         NonZeroU64::new(packed).map(PlayerId)
     }
 }

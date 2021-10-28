@@ -40,7 +40,7 @@ pub trait Channel: ChannelError + for<'a> ChannelFuture<'a> {
         P: Pack<S>;
 
     /// Waits until channel is ready for `recv` call.
-    fn recv_ready<'a>(&'a mut self) -> <Self as ChannelFuture<'a>>::Ready;
+    fn recv_ready(&mut self) -> <Self as ChannelFuture<'_>>::Ready;
 
     /// Attempts to receive packet from the channel.
     /// If no new packets arrived `Ok(None)` is returned.

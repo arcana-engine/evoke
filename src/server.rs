@@ -463,16 +463,22 @@ impl RemotePlayer for DummyRemotePlayer {
 /// Allows adding new descriptors and setting remote player type.
 pub struct ServerBuilder<P, R> {
     ids: Vec<TypeId>,
-    marker: PhantomData<fn(P, R)>,
+    marker: PhantomData<(P, R)>,
 }
 
 /// Marker type signals that remote player type is not set.
 /// [`ServerBuilder`] starts with this type parameter in place where [`RemotePlayer`] is expected.
 pub enum NoRemotePlayerType {}
 
+impl Default for ServerBuilder<NoRemotePlayerType, ()> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ServerBuilder<NoRemotePlayerType, ()> {
     /// Returns new un-configured [`ServerBuilder`].
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         ServerBuilder {
             ids: Vec::new(),
             marker: PhantomData,
@@ -523,6 +529,15 @@ impl<P> ServerBuilder<P, ()> {
     }
 }
 
+type RunImpl = for<'a> fn(
+    &'a mut ServerSession<TcpChannel, TcpListener>,
+    &'a mut IdGen,
+    &'a mut EntityMapper,
+    &'a mut HashMap<PlayerId, ConnectedPlayer<dyn Any + Send + Sync>>,
+    &'a mut World,
+    &'a Scope<'_>,
+) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + 'a>>;
+
 /// Authoritative server system.
 /// It should be configured with [`ServerBuilder`] and polled using [`ServerSystem::run`] method, preferably on fixed interval.
 pub struct ServerSystem {
@@ -530,15 +545,7 @@ pub struct ServerSystem {
     players: HashMap<PlayerId, ConnectedPlayer<dyn Any + Send + Sync>>,
     id_gen: IdGen,
     mapper: EntityMapper,
-
-    run_impl: for<'a> fn(
-        &'a mut ServerSession<TcpChannel, TcpListener>,
-        &'a mut IdGen,
-        &'a mut EntityMapper,
-        &'a mut HashMap<PlayerId, ConnectedPlayer<dyn Any + Send + Sync>>,
-        &'a mut World,
-        &'a Scope<'_>,
-    ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + 'a>>,
+    run_impl: RunImpl,
 }
 
 struct ConnectedPlayer<P: ?Sized> {

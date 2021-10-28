@@ -154,7 +154,7 @@ enum TrackReplicate {
 }
 
 impl TrackReplicate {
-    fn from_mask<'a, B>(idx: usize, mask: &B) -> Result<Self, BadMessage>
+    fn from_mask<B>(idx: usize, mask: &B) -> Result<Self, BadMessage>
     where
         B: BitTest,
     {
@@ -309,16 +309,22 @@ impl LocalPlayer for DummyLocalPlayer {
 /// Allows adding new descriptors and setting local player type.
 pub struct ClientBuilder<I, R> {
     ids: Vec<TypeId>,
-    marker: PhantomData<fn(I, R)>,
+    marker: PhantomData<(I, R)>,
 }
 
 /// Marker type signals that remote player type is not set.
 /// [`ClientBuilder`] starts with this type parameter in place where [`LocalPlayer`] is expected.
 pub enum NoLocalPlayerType {}
 
+impl Default for ClientBuilder<NoLocalPlayerType, ()> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClientBuilder<NoLocalPlayerType, ()> {
     /// Returns new un-configured [`ClientBuilder`].
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         ClientBuilder {
             ids: Vec::new(),
             marker: PhantomData,
@@ -369,24 +375,28 @@ impl<P> ClientBuilder<P, ()> {
     }
 }
 
+type SendInputs = for<'a> fn(
+    &'a HashSet<PlayerId>,
+    &'a mut ClientSession<TcpChannel>,
+    &'a mut World,
+    &'a Scope<'_>,
+) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + 'a>>;
+
+type Replicate = fn(
+    &mut ClientSession<TcpChannel>,
+    &mut EntityMapper,
+    &mut World,
+    scope: &Scope<'_>,
+) -> eyre::Result<()>;
+
 /// Client system that connects to authoritative server.
 /// It should be configured with [`ClientBuilder`] and polled using [`ClientSystem::run`] method.
 pub struct ClientSystem {
     session: Option<ClientSession<TcpChannel>>,
     mapper: EntityMapper,
     controlled: HashSet<PlayerId>,
-    send_inputs: for<'a> fn(
-        &'a HashSet<PlayerId>,
-        &'a mut ClientSession<TcpChannel>,
-        &'a mut World,
-        &'a Scope<'_>,
-    ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + 'a>>,
-    replicate: fn(
-        &mut ClientSession<TcpChannel>,
-        &mut EntityMapper,
-        &mut World,
-        scope: &Scope<'_>,
-    ) -> eyre::Result<()>,
+    send_inputs: SendInputs,
+    replicate: Replicate,
 }
 
 impl ClientSystem {
@@ -543,7 +553,7 @@ where
     let inputs = scope.to_scope_from_iter(inputs);
     let inputs = inputs
         .iter()
-        .map(|(pid, (nid, input))| ((*pid, (*nid, input))));
+        .map(|(pid, (nid, input))| (*pid, (*nid, input)));
 
     tracing::debug!("Sending input ({})", session.current_step());
     Box::pin(async move {
