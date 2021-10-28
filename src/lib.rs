@@ -206,7 +206,7 @@ impl Schema for WorldSchema {
         align_of::<FixedUsize>()
     }
 
-    fn unpack<'a>(packed: WorldPacked, input: &'a [u8]) -> WorldUnpacked<'a> {
+    fn unpack(packed: WorldPacked, input: &[u8]) -> WorldUnpacked<'_> {
         let offset = packed.offset as usize;
         let raw = &input[offset..];
         let updated = packed.updated as usize;
@@ -243,7 +243,7 @@ impl Schema for InputSchema {
         align_of::<FixedUsize>()
     }
 
-    fn unpack<'a>(packed: InputPacked, input: &'a [u8]) -> &'a [u8] {
+    fn unpack(packed: InputPacked, input: &[u8]) -> &[u8] {
         let offset = packed.offset as usize;
         let len = packed.len as usize;
         &input[offset..][..len]
