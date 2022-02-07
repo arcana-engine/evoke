@@ -92,13 +92,7 @@ impl Channel for TcpChannel {
         S: Schema,
         P: Pack<S>,
     {
-        let ptr = scope.alloc(Layout::from_size_align(MAX_PACKET_SIZE, S::align()).unwrap());
-
-        let buf = unsafe {
-            let ptr = ptr.as_ptr();
-            std::ptr::write_bytes(ptr as *mut u8, 0xfe, MAX_PACKET_SIZE);
-            &mut *ptr
-        };
+        let buf = scope.alloc_zeroed(Layout::from_size_align(MAX_PACKET_SIZE, S::align()).unwrap());
 
         let size = alkahest::write(&mut buf[size_of::<TcpHeader>()..], packet);
 
