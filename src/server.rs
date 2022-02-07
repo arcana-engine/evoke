@@ -4,7 +4,7 @@
 //!
 //! ```
 //! # use {evoke::server::{ServerSystem, DummyRemotePlayer}, core::marker::PhantomData};
-//! # async fn server<'a>(world: &'a mut hecs::World, scope: &'a scoped_arena::Scope<'a>) -> eyre::Result<()> {
+//! # async fn server<'a>(world: &'a mut edict::World, scope: &'a scoped_arena::Scope<'a>) -> eyre::Result<()> {
 //! let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, 12345)).await?;
 //!
 //! #[derive(Clone, PartialEq, serde::Serialize)]
@@ -34,11 +34,16 @@ use alkahest::{Bytes, FixedUsize, Pack};
 
 use bincode::Options as _;
 use bitsetium::{BitEmpty, BitSet, BitTestNone};
+use edict::{
+    component::Component,
+    entity::EntityId,
+    query::{Fetch, ImmutableQuery, NonTrackingQuery, Query},
+    world::World,
+};
 use evoke_core::{
     channel::tcp::TcpChannel,
     client_server::{ClientId, Event, PlayerId, ServerSession},
 };
-use hecs::{Component, Entity, Fetch, Query, World};
 use scoped_arena::Scope;
 use tokio::net::TcpListener;
 use tracing::instrument;
@@ -91,7 +96,7 @@ pub trait DescriptorPack<'a> {
 /// [this blanket impl]: trait.Descriptor.html#impl-Descriptor
 pub trait Descriptor: for<'a> DescriptorPack<'a> + 'static {
     /// Query that will be performed during replication process.
-    type Query: Query;
+    type Query: Query + NonTrackingQuery + ImmutableQuery;
 
     /// Component containing "history" of the components processed by this descriptor.
     /// Used by server for diff-compression.
@@ -311,13 +316,13 @@ impl Replicator for () {
             .with::<ServerOwned>()
             .without::<ServerEntity<(History<PlayerId>,)>>();
 
-        let entities: &[Entity] = scope.to_scope_from_iter(query.into_iter().map(|(e, ())| e));
+        let entities: &[EntityId] = scope.to_scope_from_iter(query.into_iter().map(|(e, ())| e));
 
-        for &e in entities {
-            let nid = mapper.new_nid(id_gen, e);
+        for e in entities {
+            let nid = mapper.new_nid(id_gen, *e);
 
             world
-                .insert_one(
+                .try_insert(
                     e,
                     ServerEntity {
                         nid,
@@ -353,7 +358,7 @@ impl Replicator for () {
     {
         let opts = bincode_opts();
 
-        let mut query = world.query::<(&ServerEntity<(History<PlayerId>,)>, Option<&PlayerId>)>();
+        let query = world.query::<(&ServerEntity<(History<PlayerId>,)>, Option<&PlayerId>)>();
 
         let mut cursor = std::io::Cursor::new(output);
 
@@ -444,7 +449,7 @@ pub trait RemotePlayer: Send + Sync + 'static {
 
     /// Process input sent by associated player.
     /// This function is called for each entity that receives commands from the player.
-    fn apply_input(&mut self, entity: Entity, world: &mut World, pack: Self::Input);
+    fn apply_input(&mut self, entity: EntityId, world: &mut World, pack: Self::Input);
 }
 
 /// This type is dummy implementation of [`RemotePlayer`] trait.
@@ -456,7 +461,7 @@ impl RemotePlayer for DummyRemotePlayer {
     fn accept(_info: Self::Info, _pid: PlayerId, _world: &mut World) -> eyre::Result<Self> {
         Ok(DummyRemotePlayer)
     }
-    fn apply_input(&mut self, _entity: Entity, _world: &mut World, _pack: Self::Input) {}
+    fn apply_input(&mut self, _entity: EntityId, _world: &mut World, _pack: Self::Input) {}
 }
 
 /// This type implements builder-pattern to configure [`ServerSystem`].
@@ -786,12 +791,12 @@ macro_rules! for_tuple {
                     .with::<ServerOwned>()
                     .without::<ServerEntity<( $( History<$t::History>, )+ History<PlayerId>,)>>();
 
-                let entities: &[Entity] = scope.to_scope_from_iter(query.into_iter().map(|(e, ())| e));
+                let entities: &[EntityId] = scope.to_scope_from_iter(query.into_iter().map(|(e, ())| e));
 
-                for &e in entities {
-                    let nid = mapper.new_nid(id_gen, e);
+                for e in entities {
+                    let nid = mapper.new_nid(id_gen, *e);
 
-                    world.insert_one(
+                    world.try_insert(
                         e,
                         ServerEntity {
                             nid,
@@ -831,7 +836,7 @@ macro_rules! for_tuple {
             {
                 let opts = bincode::DefaultOptions::new().allow_trailing_bytes();
 
-                let mut query = world.query::<(&ServerEntity<($( History<$t::History>, )+ History<PlayerId>,)>, $( Option<$t::Query>, )+ Option<&PlayerId>)>();
+                let query = world.query::<(&ServerEntity<($( History<$t::History>, )+ History<PlayerId>,)>, $( Option<$t::Query>, )+ Option<&PlayerId>)>();
 
                 let mut cursor = std::io::Cursor::new(output);
 

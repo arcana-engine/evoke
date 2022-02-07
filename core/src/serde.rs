@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use crate::CommandQueue;
 use alkahest::Bytes;
-use hecs::Component;
+use edict::Component;
 use scoped_arena::Scope;
 
 #[cfg(feature = "client")]

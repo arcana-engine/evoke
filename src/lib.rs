@@ -23,7 +23,7 @@
 //! with generic payload.
 //! Evoke's core is available as separate crate `evoke-core` and re-exported from this crate as `evoke::core`
 //!
-//! Unlike the `evoke` crate (this one) `evoke-core` does not depends on `hecs` and can be used
+//! Unlike the `evoke` crate (this one) `evoke-core` does not depends on `edict` and can be used
 //! in any game engine, even written in language other than Rust if packed into FFI-ready library.
 //!
 //! ## Usage
@@ -51,14 +51,14 @@
 //!     type Info = MyPlayerInfo;
 //!     type Input = MyPlayerInput;
 //!
-//!     fn accept(info: MyPlayerInfo, pid: evoke::PlayerId, world: &mut hecs::World) -> eyre::Result<Self> {
+//!     fn accept(info: MyPlayerInfo, pid: evoke::PlayerId, world: &mut edict::World) -> eyre::Result<Self> {
 //!         // Decide here whether accept new player based on `info` provided.
 //!         // `Ok` signals that player is accepted.
 //!         // `Err` signals that player is rejected.
 //!         Ok(MyRemotePlayer)
 //!     }
 //!
-//!     fn apply_input(&mut self, entity: hecs::Entity, world: &mut hecs::World, pack: MyPlayerInput) {
+//!     fn apply_input(&mut self, entity: edict::EntityId, world: &mut edict::World, pack: MyPlayerInput) {
 //!         // Input is associated with provided entity.
 //!         // This code should transform input and put it where other systems would be able to consume it properly.
 //!         // Usually it do the reverse of [`client::LocalPlayer::replicate`].
@@ -78,7 +78,7 @@
 //!     .with_player::<MyRemotePlayer>()
 //!     .build(listener);
 //!
-//! let mut world = hecs::World::new();
+//! let mut world = edict::World::new();
 //! let scope = scoped_arena::Scope::new();
 //!
 //! // game loop
@@ -132,7 +132,7 @@
 //!     .with_player::<MyLocalPlayer>()
 //!     .build();
 //!
-//! let mut world = hecs::World::new();
+//! let mut world = edict::World::new();
 //! let scope = scoped_arena::Scope::new();
 //!
 //! client.connect((std::net::Ipv4Addr::LOCALHOST, 12523), &scope).await?;

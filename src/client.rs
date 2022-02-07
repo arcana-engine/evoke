@@ -4,7 +4,7 @@
 //!
 //! ```
 //! # use {evoke::client::{ClientSystem, DummyLocalPlayer}, core::marker::PhantomData};
-//! # async fn client<'a>(world: &'a mut hecs::World, scope: &'a scoped_arena::Scope<'a>) -> eyre::Result<()> {
+//! # async fn client<'a>(world: &'a mut edict::World, scope: &'a scoped_arena::Scope<'a>) -> eyre::Result<()> {
 //! #[derive(serde::Deserialize)]
 //! struct Foo;
 //!
@@ -31,12 +31,17 @@ use std::{
 use alkahest::{Bytes, FixedUsize, Pack};
 use bincode::Options as _;
 use bitsetium::BitTest;
+use edict::{
+    component::Component,
+    entity::EntityId,
+    query::{Fetch, NonTrackingQuery, Query},
+    world::{EntityError, World},
+};
 use evoke_core::{
     channel::tcp::TcpChannel,
     client_server::{ClientSession, PlayerId},
 };
 use eyre::WrapErr as _;
-use hecs::{Component, Entity, Fetch, Query, World};
 use scoped_arena::Scope;
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tracing::instrument;
@@ -69,14 +74,14 @@ pub type DescriptorPackType<T> = <T as Descriptor>::Pack;
 /// [this blanket impl]: trait.Descriptor.html#impl-Descriptor
 pub trait Descriptor: 'static {
     /// Query for components.
-    type Query: Query;
+    type Query: Query + NonTrackingQuery;
 
     /// Data ready to be unpacked.
     type Pack: serde::de::DeserializeOwned;
 
     /// Insert components managed by this descriptor.
     /// This method is called during replication if descriptor's query cannot be satisfied.
-    fn insert(pack: Self::Pack, entity: Entity, world: &mut World);
+    fn insert(pack: Self::Pack, entity: &EntityId, world: &mut World);
 
     /// Modify components managed by this descriptor.
     /// This method is called during replication if descriptor's query is satisfied.
@@ -84,7 +89,7 @@ pub trait Descriptor: 'static {
 
     /// Remove components managed by this descriptor.
     /// This method is called during replication if descriptor's query is satisfied.
-    fn remove(entity: Entity, world: &mut World);
+    fn remove(entity: &EntityId, world: &mut World);
 }
 
 impl<T> Descriptor for T
@@ -98,12 +103,12 @@ where
         *item = pack;
     }
 
-    fn insert(pack: T, entity: Entity, world: &mut World) {
-        world.insert_one(entity, pack).unwrap();
+    fn insert(pack: T, entity: &EntityId, world: &mut World) {
+        world.try_insert(entity, pack).unwrap();
     }
 
-    fn remove(entity: Entity, world: &mut World) {
-        let _ = world.remove_one::<T>(entity);
+    fn remove(entity: &EntityId, world: &mut World) {
+        let _ = world.remove::<T>(entity);
     }
 }
 
@@ -116,11 +121,11 @@ impl Descriptor for PlayerIdDescriptor {
     fn modify(pack: NonZeroU64, item: &mut PlayerId) {
         item.0 = pack;
     }
-    fn insert(pack: NonZeroU64, entity: Entity, world: &mut World) {
-        world.insert_one(entity, PlayerId(pack)).unwrap();
+    fn insert(pack: NonZeroU64, entity: &EntityId, world: &mut World) {
+        world.try_insert(entity, PlayerId(pack)).unwrap();
     }
-    fn remove(entity: Entity, world: &mut World) {
-        world.remove_one::<PlayerId>(entity).unwrap();
+    fn remove(entity: &EntityId, world: &mut World) {
+        world.remove::<PlayerId>(entity).unwrap();
     }
 }
 
@@ -169,7 +174,7 @@ impl TrackReplicate {
 
 fn replicate_one<'a, T>(
     track: TrackReplicate,
-    entity: Entity,
+    entity: &EntityId,
     world: &mut World,
     cursor: &'a mut Cursor<&[u8]>,
 ) -> Result<(), BadMessage>
@@ -180,8 +185,8 @@ where
 
     let item = match world.query_one_mut::<T::Query>(entity) {
         Ok(item) => Some(item),
-        Err(hecs::QueryOneError::Unsatisfied) => None,
-        Err(hecs::QueryOneError::NoSuchEntity) => {
+        Err(EntityError::MissingComponents) => None,
+        Err(EntityError::NoSuchEntity) => {
             unreachable!("EntityMapper must guarantee that entity is alive")
         }
     };
@@ -240,7 +245,7 @@ impl Replicator for () {
             // Begin for each component + player_id.
 
             let pid = TrackReplicate::from_mask(0, &header.mask)?;
-            replicate_one::<PlayerIdDescriptor>(pid, entity, world, &mut cursor)?;
+            replicate_one::<PlayerIdDescriptor>(pid, &entity, world, &mut cursor)?;
 
             // End for each component + player_id.
         }
@@ -252,7 +257,7 @@ impl Replicator for () {
             })?;
 
             if let Some(entity) = mapper.get(nid) {
-                let _ = world.despawn(entity);
+                let _ = world.despawn(&entity);
             }
         }
 
@@ -277,7 +282,7 @@ pub trait LocalPlayerPack<'a> {
 /// Typical implementation uses single component, but is not limited to do so.
 pub trait LocalPlayer: for<'a> LocalPlayerPack<'a> + 'static {
     /// Query that will be performed during replication process.
-    type Query: Query;
+    type Query: Query + NonTrackingQuery;
 
     /// Replicates state.
     /// Returns serializable data containing all commands for an entity.
@@ -653,12 +658,12 @@ macro_rules! for_tuple {
 
                     $(
                         let $b = TrackReplicate::from_mask(mask_idx, &header.mask)?;
-                        replicate_one::<$t>($b, entity, world, &mut cursor)?;
+                        replicate_one::<$t>($b, &entity, world, &mut cursor)?;
                         mask_idx += 1;
                     )+
 
                     let pid = TrackReplicate::from_mask(mask_idx, &header.mask)?;
-                    replicate_one::<PlayerIdDescriptor>(pid, entity, world, &mut cursor)?;
+                    replicate_one::<PlayerIdDescriptor>(pid, &entity, world, &mut cursor)?;
 
                     // End for each component + player_id.
                 }
@@ -670,7 +675,7 @@ macro_rules! for_tuple {
                     })?;
 
                     if let Some(entity) = EntityMapper::get(mapper, nid) {
-                        let _ = world.despawn(entity);
+                        let _ = world.despawn(&entity);
                     }
                 }
 
